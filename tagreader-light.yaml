@@ -14,7 +14,6 @@ dashboard_import:
 
 improv_serial:
 
-
 substitutions:
   name: tagreader
   friendly_name: TagReader
@@ -141,6 +140,7 @@ button:
   - platform: restart
     name: "${friendly_name} Restart"
     entity_category: config
+
 # Enable logging
 logger:
   # level: VERY_VERBOSE
@@ -195,18 +195,32 @@ i2c:
   scan: False
   frequency: 400kHz
 
-globals:
-  - id: source
-    type: std::string
-  - id: url
-    type: std::string
-  - id: info
-    type: std::string
-
 pn532_i2c:
   id: pn532_board
   on_tag:
     then:
+    - homeassistant.tag_scanned: !lambda |
+        if (!tag.has_ndef_message()) {
+          ESP_LOGD("tagreader", "No NDEF");
+          return x;
+        }
+        auto message = tag.get_ndef_message();
+        auto records = message->get_records();
+        for (auto &record : records) {
+          std::string payload = record->get_payload();
+          size_t pos = payload.find("https://www.home-assistant.io/tag/");
+          if (pos != std::string::npos) {
+            ESP_LOGD("tagreader", "Found Home Assistant tag NDEF");
+            return payload.substr(pos + 34);
+          }
+        }
+        ESP_LOGD("tagreader", "Bad NDEF, fallback to uid");
+        return x;
+    - if:
+        condition:
+          switch.is_on: buzzer_enabled
+        then:
+        - rtttl.play: "success:d=24,o=5,b=100:c,g,b"
     - if:
         condition:
           switch.is_on: led_enabled
@@ -218,93 +232,11 @@ pn532_i2c:
             green: 100%
             blue: 0%
             flash_length: 500ms
-    
-    - delay: 0.15s #to fix slow component
-        
-    - lambda: |-
-        id(source)="";
-        id(url)="";
-        id(info)="";
-        if (tag.has_ndef_message()) {
-          auto message = tag.get_ndef_message();
-          auto records = message->get_records();
-          for (auto &record : records) {
-            std::string payload = record->get_payload();
-            std::string type = record->get_type();
-            size_t hass = payload.find("https://www.home-assistant.io/tag/");
-            size_t applemusic = payload.find("https://music.apple.com");
-            size_t spotify = payload.find("https://open.spotify.com");
-            size_t sonos = payload.find("sonos-2://");
-
-            if (type == "U" and hass != std::string::npos ) {
-              ESP_LOGD("tagreader", "Found Home Assistant tag NDEF");
-              id(source)="hass";
-              id(url)=payload;
-              id(info)=payload.substr(hass + 34);
-            }
-            else if (type == "U" and applemusic != std::string::npos ) {
-              ESP_LOGD("tagreader", "Found Apple Music tag NDEF");
-              id(source)="amusic";
-              id(url)=payload;
-            }
-            else if (type == "U" and spotify != std::string::npos ) {
-              ESP_LOGD("tagreader", "Found Spotify tag NDEF");
-              id(source)="spotify";
-              id(url)=payload;
-            }
-            else if (type == "U" and sonos != std::string::npos ) {
-              ESP_LOGD("tagreader", "Found Sonos app tag NDEF");
-              id(source)="sonos";
-              id(url)=payload;
-            }
-            else if (type == "T" ) {
-              ESP_LOGD("tagreader", "Found music info tag NDEF");
-              id(info)=payload;
-            }
-            else if ( id(source)=="" ) {
-              id(source)="uid";
-            }
-          }
-        }
-        else {
-          id(source)="uid";
-        }
-    
-    - if:
-        condition:
-          lambda: 'return ( id(source)=="uid" );'
-        then:
-          - homeassistant.tag_scanned: !lambda |-
-              ESP_LOGD("tagreader", "No HA NDEF, using UID");
-              return x;
-        else:
-        - if:
-            condition:
-              lambda: 'return ( id(source)=="hass" );'
-            then:
-            - homeassistant.tag_scanned: !lambda 'return id(info);'
-            else:
-            - homeassistant.event:
-                event: esphome.music_tag
-                data:
-                  reader: !lambda |-
-                    return App.get_name().c_str();
-                  source: !lambda |-
-                    return id(source);
-                  url: !lambda |-
-                    return id(url);
-                  info: !lambda |-
-                    return id(info);
-    
-    - if:
-        condition:
-          switch.is_on: buzzer_enabled
-        then:
-        - rtttl.play: "success:d=24,o=5,b=100:c,g,b"
   on_tag_removed:
     then:
     - homeassistant.event:
         event: esphome.tag_removed
+
 # Define the buzzer output
 output:
 - platform: esp8266_pwm
@@ -315,7 +247,6 @@ binary_sensor:
   - platform: status
     name: "${friendly_name} Status"
     entity_category: diagnostic
-
 
 text_sensor:
   - platform: version
