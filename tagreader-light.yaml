@@ -1,38 +1,20 @@
-# Insert your SSID and Your PWD after inital setup
-wifi:
-# networks:
-#    - ssid: 'REPLACEME'          # Enter your WiFi SSID here. Example: `ssid: 'your_network_name'`
-#      password: 'REPLACEME'      # Enter your wifi password here. Example: `password: 'abcde123456'`
-  ap:
-    ssid: ${name}
-
-# Enable the captive portal for inital WiFi setup
-captive_portal:
-
-dashboard_import:
-  package_import_url: github://adonno/tagreader/tagreader.yaml
-
-improv_serial:
-
 substitutions:
   name: tagreader
-  friendly_name: TagReader
+  friendly_name: Tag Reader
 
 esphome:
-  name: $name
-  platform: ESP8266
-  board: d1_mini
-
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2024.6.0
   # Automatically add the mac address to the name
   # so you can use a single firmware for all devices
   name_add_mac_suffix: true
-
   # This will allow for (future) project identification,
   # configuration and updates.
   project:
     name: adonno.tag_reader
     version: "1.4"
-# If buzzer is enabled, notify on api connection success
+  # If buzzer is enabled, notify on api connection success
   on_boot:
     priority: -10
     then:
@@ -50,17 +32,36 @@ esphome:
     - switch.turn_on: buzzer_enabled
     - switch.turn_on: led_enabled
 
+esp8266:
+  board: d1_mini
+    
+# Insert your SSID and Your PWD after inital setup
+wifi:
+  ap:
+    ssid: ${name}
+
+# Enable the captive portal for inital WiFi setup
+captive_portal:
+
+improv_serial:
+
+# Enable logging
+logger:
+
+dashboard_import:
+  package_import_url: github://adonno/tagreader/tagreader-light.yaml@main
+
 # Define switches to control LED and buzzer from HA
 switch:
 - platform: template
-  name: "${friendly_name} Buzzer Enabled"
+  name: "Buzzer Enabled"
   id: buzzer_enabled
   icon: mdi:volume-high
   optimistic: true
   restore_mode: RESTORE_DEFAULT_ON
   entity_category: config
 - platform: template
-  name: "${friendly_name} LED enabled"
+  name: "LED enabled"
   id: led_enabled
   icon: mdi:alarm-light-outline
   optimistic: true
@@ -138,13 +139,8 @@ button:
       - rtttl.play: "write:d=24,o=5,b=100:b,b"
 
   - platform: restart
-    name: "${friendly_name} Restart"
+    name: "Restart"
     entity_category: config
-
-# Enable logging
-logger:
-  # level: VERY_VERBOSE
-  # level: VERBOSE
 
 # Enable Home Assistant API
 api:
@@ -245,21 +241,21 @@ output:
 
 binary_sensor:
   - platform: status
-    name: "${friendly_name} Status"
+    name: "Status"
     entity_category: diagnostic
 
 text_sensor:
   - platform: version
     hide_timestamp: true
-    name: "${friendly_name} ESPHome Version"
+    name: "ESPHome Version"
     entity_category: diagnostic
   - platform: wifi_info
     ip_address:
-      name: "${friendly_name} IP Address"
+      name: "IP Address"
       icon: mdi:wifi
       entity_category: diagnostic
     ssid:
-      name: "${friendly_name} Connected SSID"
+      name: "Connected SSID"
       icon: mdi:wifi-strength-2
       entity_category: diagnostic
 
@@ -276,5 +272,5 @@ light:
   flash_transition_length: 500ms
   type: GRB
   id: activity_led
-  name: "${friendly_name} LED"
+  name: "LED"
   restore_mode: ALWAYS_OFF
